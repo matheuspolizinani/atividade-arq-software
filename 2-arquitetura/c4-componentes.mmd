@@ -1,0 +1,41 @@
+%% Nivel 3 (componentes) do Nucleo Financeiro.
+%% Estilo visual baseado no c4model.com (caixas brancas, borda/texto azul, cilindro
+%% para armazenamento). Segue a convencao de nivel 3 do livro (secao 3.6): a seta
+%% e rotulada pelo TIPO do conector e o agrupamento tracejado e a unidade de implantacao.
+flowchart TB
+    barramento["<b>Barramento de eventos</b><br/>[Container]"]
+    integracao["<b>Servico de Integracao</b><br/>[Container: banco e adquirente]"]
+
+    subgraph alvo["Nucleo Financeiro: Repasse e Conciliacao — unidade de implantacao"]
+        direction TB
+        entrada["<b>Adaptador de entrada</b><br/>[Component]<br/>Consumidor de eventos + API"]
+        app["<b>Servico de aplicacao de repasse</b><br/>[Component]<br/>Orquestra o fechamento"]
+        dominio["<b>Agregado de Repasse e Conciliacao</b><br/>[Component]<br/>Tarifa vigente na data da viagem"]
+        cifra["<b>Gestor de chaves e cifra por titular</b><br/>[Component]<br/>Crypto-shredding (LGPD)"]
+        projetor["<b>Projetor de conciliacao</b><br/>[Component]<br/>Reprocessa o fluxo (CQRS)"]
+        saidaES["<b>Adaptador do event store</b><br/>[Component]<br/>Grava em modo append"]
+    end
+
+    store[("<b>Event store</b><br/>append-only")]
+    keystore[("<b>Keystore</b><br/>por titular")]
+    leitura[("<b>Projecao de conciliacao</b><br/>leitura")]
+
+    barramento -->|"evento (ViagemRealizada, TarifaVigente)"| entrada
+    entrada -->|"chamada de procedimento"| app
+    app -->|"chamada de procedimento"| dominio
+    dominio -->|"chamada de procedimento"| cifra
+    app -->|"chamada de procedimento"| saidaES
+    saidaES -->|"acesso a dado compartilhado (append)"| store
+    cifra -->|"acesso a dado compartilhado"| keystore
+    store -->|"fluxo (reprocessa)"| projetor
+    projetor -->|"acesso a dado compartilhado"| leitura
+    app -->|"evento (RepasseFechado)"| barramento
+    app -->|"chamada de procedimento remota"| integracao
+
+    classDef comp fill:#ffffff,stroke:#1168bd,stroke-width:1.5px,color:#1168bd;
+    classDef store fill:#ffffff,stroke:#1168bd,stroke-width:1.5px,color:#1168bd;
+    classDef viz fill:#ffffff,stroke:#8a8a8a,stroke-width:1.5px,color:#5c5c5c;
+    class entrada,app,dominio,cifra,projetor,saidaES comp;
+    class store,keystore,leitura store;
+    class barramento,integracao viz;
+    style alvo fill:#f7fbff,stroke:#1168bd,stroke-width:1.5px,stroke-dasharray: 6 4,color:#1168bd;

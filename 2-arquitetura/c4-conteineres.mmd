@@ -1,0 +1,50 @@
+C4Container
+    title Nivel 2 (conteineres) do Sistema de Bilhetagem e Mobilidade Urbana
+
+    Person(passageiro, "Passageiro", "Valida, recarrega e consulta")
+    Person(auditoria, "Auditoria e Tribunal de Contas", "Audita o repasse e o rastro")
+
+    System_Boundary(sistema, "Sistema de Bilhetagem e Mobilidade") {
+        Container(validador, "Validador embarcado", "Edge, fila local append-only", "Aceita ou recusa em ate 300 ms mesmo sem rede")
+        Container(gateway, "Gateway de API", "Gateway", "Autentica, roteia e registra o rastro")
+        Container(validacao, "Servico de Validacao", "Servico + banco proprio", "Deduplica e detecta uso em dois onibus")
+        Container(cartoes, "Servico de Cartoes e Recarga", "Servico + banco proprio", "Saldo, recarga e gratuidade; saga com o banco")
+        Container(telemetria, "Servico de Telemetria", "Servico de ingestao", "Absorve o pico de posicoes GPS")
+        ContainerQueue(barramento, "Barramento de eventos", "Corretor de mensagens", "Entrega ao menos uma vez")
+        Container(info, "Informacao ao Passageiro", "Servico CQRS de leitura", "Projecao de chegada, escala so no pico")
+        Container(financeiro, "Nucleo Financeiro", "Servico event-sourced", "Repasse reconstruivel por tarifa vigente na data")
+        Container(integracao, "Integracao e Conformidade", "Servico hexagonal", "Anticorrupcao com terceiros e esquecimento LGPD")
+    }
+
+    System_Ext(banco, "Banco e adquirente", "Liquidacao e conciliacao")
+
+    Rel_D(passageiro, gateway, "Recarrega e consulta", "HTTPS")
+    Rel_D(passageiro, validador, "Encosta o cartao", "NFC")
+    Rel_D(auditoria, gateway, "Audita", "HTTPS")
+    Rel_D(validador, validacao, "Sincroniza ao reconectar", "HTTPS")
+    Rel_D(gateway, cartoes, "Chama", "HTTPS")
+    Rel_D(gateway, info, "Consulta chegada", "HTTPS")
+    Rel_D(validacao, barramento, "Publica ViagemRealizada", "evento")
+    Rel_D(cartoes, barramento, "Publica RecargaConfirmada", "evento")
+    Rel_D(telemetria, barramento, "Publica PosicaoRecebida", "evento")
+    Rel_D(barramento, info, "Alimenta a projecao", "evento")
+    Rel_D(barramento, financeiro, "Alimenta o repasse", "evento")
+    Rel_D(financeiro, integracao, "Solicita liquidacao", "chamada")
+    Rel_D(integracao, banco, "Liquida e concilia", "HTTPS / arquivo")
+
+    UpdateElementStyle(passageiro, $bgColor="#ffffff", $fontColor="#4a7f2c", $borderColor="#4a7f2c")
+    UpdateElementStyle(auditoria, $bgColor="#ffffff", $fontColor="#4a7f2c", $borderColor="#4a7f2c")
+    UpdateElementStyle(banco, $bgColor="#ffffff", $fontColor="#8a8a8a", $borderColor="#8a8a8a")
+    UpdateElementStyle(validador, $bgColor="#ffffff", $fontColor="#1168bd", $borderColor="#1168bd")
+    UpdateElementStyle(gateway, $bgColor="#ffffff", $fontColor="#1168bd", $borderColor="#1168bd")
+    UpdateElementStyle(validacao, $bgColor="#ffffff", $fontColor="#1168bd", $borderColor="#1168bd")
+    UpdateElementStyle(cartoes, $bgColor="#ffffff", $fontColor="#1168bd", $borderColor="#1168bd")
+    UpdateElementStyle(telemetria, $bgColor="#ffffff", $fontColor="#1168bd", $borderColor="#1168bd")
+    UpdateElementStyle(barramento, $bgColor="#ffffff", $fontColor="#1168bd", $borderColor="#1168bd")
+    UpdateElementStyle(info, $bgColor="#ffffff", $fontColor="#1168bd", $borderColor="#1168bd")
+    UpdateElementStyle(financeiro, $bgColor="#ffffff", $fontColor="#1168bd", $borderColor="#1168bd")
+    UpdateElementStyle(integracao, $bgColor="#ffffff", $fontColor="#1168bd", $borderColor="#1168bd")
+    UpdateRelStyle(telemetria, barramento, $offsetX="-60", $offsetY="-10")
+    UpdateRelStyle(gateway, info, $offsetX="-70", $offsetY="10")
+    UpdateRelStyle(validacao, barramento, $offsetX="10", $offsetY="20")
+    UpdateLayoutConfig($c4ShapeInRow="3", $c4BoundaryInRow="1")

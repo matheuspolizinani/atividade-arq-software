@@ -1,0 +1,39 @@
+C4Context
+    title Nivel 1 (contexto) do Sistema de Bilhetagem e Mobilidade Urbana
+
+    Person(passageiro, "Passageiro", "Valida a passagem, recarrega e consulta a chegada")
+    Person(motorista, "Motorista", "Opera o validador embarcado")
+    Person(operadora, "Operadora de onibus", "Consorcio que recebe o repasse")
+    Person(gestor, "Orgao gestor", "Regula, fiscaliza e reparte a receita")
+    Person(auditoria, "Auditoria e Tribunal de Contas", "Fiscaliza o repasse; exige rastro reconstruivel")
+    Person(encarregado, "Atendimento e encarregado LGPD", "Contestacao, gratuidade e esquecimento")
+
+    System(sistema, "Sistema de Bilhetagem e Mobilidade", "Valida passagens, controla cartoes e recarga, coleta telemetria, informa o passageiro e apura o repasse")
+
+    System_Ext(banco, "Banco e adquirente", "Liquidacao da recarga e conciliacao")
+    System_Ext(recargaext, "Rede de recarga externa", "Lojas e totens de terceiros")
+    System_Ext(gestorext, "Sistemas do orgao gestor e operadoras", "Contratos formais, formatos impostos")
+
+    Rel(passageiro, sistema, "Valida, recarrega e consulta", "HTTPS / NFC")
+    Rel(motorista, sistema, "Opera o validador", "local")
+    Rel(operadora, sistema, "Consulta e contesta o repasse", "HTTPS")
+    Rel(gestor, sistema, "Define tarifa e fiscaliza", "HTTPS")
+    Rel(auditoria, sistema, "Audita o repasse e o rastro", "HTTPS")
+    Rel(encarregado, sistema, "Atende e aplica LGPD", "HTTPS")
+    Rel(sistema, banco, "Liquida e concilia", "HTTPS")
+    Rel(recargaext, sistema, "Envia eventos de recarga", "HTTPS")
+    Rel(sistema, gestorext, "Troca arquivos e dados", "HTTPS / arquivo")
+
+    UpdateElementStyle(passageiro, $bgColor="#ffffff", $fontColor="#4a7f2c", $borderColor="#4a7f2c")
+    UpdateElementStyle(motorista, $bgColor="#ffffff", $fontColor="#4a7f2c", $borderColor="#4a7f2c")
+    UpdateElementStyle(operadora, $bgColor="#ffffff", $fontColor="#4a7f2c", $borderColor="#4a7f2c")
+    UpdateElementStyle(gestor, $bgColor="#ffffff", $fontColor="#4a7f2c", $borderColor="#4a7f2c")
+    UpdateElementStyle(auditoria, $bgColor="#ffffff", $fontColor="#4a7f2c", $borderColor="#4a7f2c")
+    UpdateElementStyle(encarregado, $bgColor="#ffffff", $fontColor="#4a7f2c", $borderColor="#4a7f2c")
+    UpdateElementStyle(sistema, $bgColor="#ffffff", $fontColor="#1168bd", $borderColor="#1168bd")
+    UpdateElementStyle(banco, $bgColor="#ffffff", $fontColor="#8a8a8a", $borderColor="#8a8a8a")
+    UpdateElementStyle(recargaext, $bgColor="#ffffff", $fontColor="#8a8a8a", $borderColor="#8a8a8a")
+    UpdateElementStyle(gestorext, $bgColor="#ffffff", $fontColor="#8a8a8a", $borderColor="#8a8a8a")
+    UpdateRelStyle(operadora, sistema, $offsetX="-20", $offsetY="120")
+    UpdateRelStyle(gestor, sistema, $offsetX="30", $offsetY="120")
+    UpdateLayoutConfig($c4ShapeInRow="2", $c4BoundaryInRow="1")
