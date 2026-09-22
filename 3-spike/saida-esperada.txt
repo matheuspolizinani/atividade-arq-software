@@ -1,0 +1,11 @@
+=== SPIKE ADR 0005 ===
+1. Registrando viagem...
+2. Dado pessoal recuperável antes do esquecimento: Ana Silva
+3. Auditoria financeira antes: total=R$5.40, linhas=['301']
+4. Solicitando esquecimento...
+5. Evento original ainda existe no event store: True
+6. Dado pessoal recuperável após destruir a chave: None
+7. Auditoria financeira preservada: total=R$5.40, linhas=['301']
+8. Eventos registrados: ['VIAGEM_REGISTRADA', 'ESQUECIMENTO_SOLICITADO']
+9. Resultado do spike: esquecimento_registrado=True, dado_inacessivel=True, financeiro_preservado=True
+10. ADR 0005 validada: auditoria preservada + chave destruída.
