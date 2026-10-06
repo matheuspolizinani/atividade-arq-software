@@ -1,11 +1,11 @@
-=== SPIKE ADR 0005 ===
-1. Registrando viagem...
-2. Dado pessoal recuperável antes do esquecimento: Ana Silva
-3. Auditoria financeira antes: total=R$5.40, linhas=['301']
-4. Solicitando esquecimento...
-5. Evento original ainda existe no event store: True
-6. Dado pessoal recuperável após destruir a chave: None
-7. Auditoria financeira preservada: total=R$5.40, linhas=['301']
-8. Eventos registrados: ['VIAGEM_REGISTRADA', 'ESQUECIMENTO_SOLICITADO']
-9. Resultado do spike: esquecimento_registrado=True, dado_inacessivel=True, financeiro_preservado=True
-10. ADR 0005 validada: auditoria preservada + chave destruída.
+=== SPIKE ADR 0008 (substitui ADR 0005) ===
+1. Registrando viagem subsidiada (estudante)...
+2. Identidade recuperável antes do esquecimento: Ana Silva|123.456.789-00
+3. Auditoria de subsídio antes: total=R$5.40, provas=[{'linha': '301', 'beneficio': 'ESTUDANTE', 'pseudonimo': 'pid-45500098c9'}]
+4. Solicitando esquecimento (LGPD)...
+5. Evento original ainda existe: True
+6. Identidade recuperável após destruir a chave: None
+7. Auditoria de subsídio preservada: total=R$5.40, provas=[{'linha': '301', 'beneficio': 'ESTUDANTE', 'pseudonimo': 'pid-45500098c9'}]
+8. Eventos registrados: ['VIAGEM_SUBSIDIADA', 'ESQUECIMENTO_SOLICITADO']
+9. Resultado do spike: esquecimento_registrado=True, identidade_inacessivel=True, elegibilidade_preservada=True, subsidio_preservado=True
+10. ADR 0008 validado: identidade apagada; subsídio e prova de elegibilidade intactos.

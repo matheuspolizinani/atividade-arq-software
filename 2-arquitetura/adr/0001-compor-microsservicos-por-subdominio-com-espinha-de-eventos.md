@@ -1,6 +1,6 @@
 # ADR 0001: compor microsserviços por subdomínio com espinha dorsal de eventos
 
-**Status:** aceito
+**Status:** substituído pelo ADR 0009
 
 **Contexto:** O sistema reúne subdomínios com atributos de qualidade divergentes: a validação embarcada é tempo real, precisa responder em até 300 ms e opera até 4 horas sem rede; a telemetria é fluxo contínuo, com 80 posições por segundo em média e cinco vezes isso no pico; o repasse é lote mensal auditável, que recalcula o mês inteiro; a informação ao passageiro é analítica e tolera atraso. O envelope E impõe operação sob fiscalização, com trilha de auditoria completa e direito ao esquecimento da LGPD, e a equipe é de 15 desenvolvedores com 1 responsável por conformidade. Segundo a seção 2.5, a fronteira do quantum arquitetural é onde os requisitos podem divergir, e aqui eles divergem por subdomínio.
 

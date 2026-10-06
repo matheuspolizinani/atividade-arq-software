@@ -1,54 +1,49 @@
-# Spike — ADR 0005: Auditoria imutável + esquecimento LGPD
+# Spike — ADR 0008: identidade civil (esquecimento) + elegibilidade regulatória (auditoria)
+
+> Este spike provava originalmente o **ADR 0005**. Após a leitura cruzada (objeção 03 do Grupo 02), o ADR 0005 foi substituído pelo **ADR 0008**, que segmenta o dado pessoal; o spike foi atualizado para provar a decisão vigente. Veja o CHANGELOG em `5-final/CHANGELOG.md`.
 
 ## O que este spike prova
 
-Este spike demonstra a decisão arquitetural registrada na **ADR 0005**: manter os eventos financeiros em um histórico append-only, mas separar os dados pessoais e protegê-los com uma chave específica por titular.
+Demonstra a decisão do **ADR 0008**: manter a auditoria imutável e o esquecimento LGPD por destruição criptográfica, **separando** dentro do evento:
 
-O fluxo demonstrado é:
+1. **Identidade civil** (nome, CPF) — cifrada com uma chave por titular; destruí-la a torna irrecuperável (crypto-shredding).
+2. **Elegibilidade regulatória** (tipo de benefício, emissor, pseudônimo opaco) — em claro, pseudonimizada, retida por base legal; **não depende da chave do titular**.
+3. **Dados financeiros/viagem** (linha, operador, subsídio devido) — em claro.
 
-1. Uma viagem é registrada.
-2. Os dados financeiros ficam no evento.
-3. O nome do passageiro é armazenado de forma cifrada.
-4. A chave do passageiro fica em um `KeyStore` separado.
-5. Antes do esquecimento, o nome pode ser recuperado.
-6. O pedido de esquecimento registra um novo evento.
-7. A chave do titular é destruída (**crypto-shredding**).
-8. O evento original continua existindo para auditoria.
-9. O dado pessoal deixa de ser recuperável pelo sistema.
-10. Os dados financeiros continuam disponíveis para auditoria e reconciliação.
+O fluxo demonstrado:
 
-Assim, o spike verifica o ponto de maior risco da arquitetura: o esquecimento do passageiro não exige apagar o evento financeiro nem destruir o histórico necessário para auditoria.
+1. Registra uma viagem **subsidiada** (estudante): o passageiro paga 0 e a prefeitura deve R$ 5,40 ao operador.
+2. Antes do esquecimento, a identidade é recuperável e o subsídio é auditável com prova de elegibilidade.
+3. O pedido de esquecimento grava um novo evento e **destrói a chave** do titular.
+4. Depois: a identidade vira irrecuperável (`None`), **mas** o total de subsídio devido **e** a prova de que havia um benefício ativo (ESTUDANTE, pseudônimo) **permanecem**.
+
+Assim, o spike cobre o ponto que a leitura cruzada expôs: o esquecimento do passageiro **não** apaga a prova de que o subsídio público foi legítimo, que o Tribunal de Contas precisa auditar.
 
 ## Como executar
 
-Requisito: **Python 3.12**.
-
-Dentro desta pasta, execute:
+Requisito: **Python 3.12+** (testado em 3.13). Dentro desta pasta:
 
 ```bash
 python3 exemplo.py
 ```
 
-O programa usa somente a biblioteca padrão do Python e não depende de banco de dados, serviços externos ou internet.
-
-A saída esperada está registrada em `saida-esperada.txt`.
+Só biblioteca padrão; sem banco, serviços externos ou internet. A saída esperada está em `saida-esperada.txt` e é determinística (rodar duas vezes produz o mesmo resultado).
 
 ## O que está sendo simulado
 
-O `EventStore` representa um armazenamento de eventos append-only.
-
-O `KeyStore` representa um serviço externo de gerenciamento de chaves. No spike, ele é apenas um dicionário em memória para manter o exemplo pequeno e determinístico.
-
-A cifra também é apenas uma **simulação didática**, criada com recursos da biblioteca padrão para demonstrar a relação entre dado cifrado e chave. Ela **não deve ser usada como implementação criptográfica de produção**. Em um sistema real, seriam necessários um algoritmo criptográfico apropriado, gerenciamento seguro de chaves, controle de acesso, rotação e mecanismos de recuperação/backup compatíveis com a política de segurança.
+- `EventStore`: armazenamento de eventos append-only.
+- `KeyStore`: cofre externo de chaves por titular (dicionário em memória, para manter o spike pequeno).
+- `cifrar/decifrar`: cifra **didática** (XOR com keystream HMAC-SHA256). **Não é criptografia de produção** — serve só para demonstrar a relação entre dado cifrado e chave.
+- `pseudonimo`: identificador opaco e estável do titular, **não reversível** à identidade após o shredding.
 
 ## O que aconteceria se a decisão estivesse errada?
 
-Se o dado pessoal fosse armazenado diretamente no evento financeiro, o esquecimento poderia exigir a alteração ou exclusão de um fato que deveria permanecer disponível para auditoria e reconciliação.
+- Se a **identidade** ficasse em claro no evento: violaria o direito ao esquecimento.
+- Se a **elegibilidade** fosse cifrada junto com a identidade (como no ADR 0005 original): ao destruir a chave, a prova do subsídio sumiria e a operadora não poderia comprovar o direito na auditoria.
+- Se o evento fosse **apagado fisicamente**: quebraria o histórico financeiro e a reconstrução exigida pela fiscalização.
 
-Outra alternativa seria apagar fisicamente o evento. Isso preservaria o esquecimento do passageiro, mas quebraria o histórico financeiro necessário para reconstruir e auditar a operação.
-
-Com a decisão do ADR 0005, a destruição da chave remove a capacidade do sistema de recuperar o dado pessoal, enquanto o evento financeiro e o registro do pedido de esquecimento permanecem.
+Com o ADR 0008, destruir a chave remove só a identidade civil; subsídio e elegibilidade (pseudonimizada) permanecem auditáveis.
 
 ## Limite do spike
 
-Este código comprova apenas a **decisão arquitetural e o fluxo técnico**. Ele não comprova, sozinho, conformidade jurídica com a LGPD nem substitui os requisitos de segurança de uma implementação real.
+Comprova a **decisão arquitetural e o fluxo técnico**. Não comprova, sozinho, conformidade jurídica com a LGPD nem substitui os requisitos de segurança (algoritmo real, gestão de chaves, controle de acesso, rotação, backup) de uma implementação de produção.

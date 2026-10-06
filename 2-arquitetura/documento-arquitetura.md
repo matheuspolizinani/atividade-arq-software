@@ -10,6 +10,8 @@
 
 ## 1. Identificação e escopo
 
+> **Versão final (Entrega 5).** Este documento foi revisado após a leitura cruzada; o que mudou e por quê está em [`../5-final/CHANGELOG.md`](../5-final/CHANGELOG.md). As duas mudanças estruturais: a composição geral passou a **monólito modular + serviços para os quanta exigidos** ([ADR 0009](adr/0009-consolidar-o-nucleo-transacional-em-monolito-modular.md), que substitui o 0001) e o dado pessoal foi **segmentado em identidade civil e elegibilidade regulatória** ([ADR 0008](adr/0008-segmentar-dado-pessoal-em-identidade-civil-e-elegibilidade-regulatoria.md), que substitui o 0005).
+
 O órgão gestor do transporte vai substituir o sistema de bilhetagem eletrônica, hoje um monolito fechado de fornecedor. O novo sistema cobre validação da passagem no ônibus, cartões e recarga, telemetria da frota, informação ao passageiro e repasse financeiro entre operadoras e prefeitura.
 
 O **envelope E** define quem constrói e opera: operação sob fiscalização de órgão regulador, em nuvem pública, com **trilha de auditoria completa** (tudo reconstruível) e **LGPD com direito ao esquecimento**. A equipe tem **15 desenvolvedores e 1 responsável por conformidade**. A pergunta que o envelope obriga a responder é: *como guardar tudo para sempre e ainda assim apagar o que a lei manda apagar?*
@@ -29,15 +31,17 @@ As três figuras têm fonte em Mermaid (`.mmd`) versionada ao lado do `.png` ren
 
 ## 2. Visão geral: a composição de estilos e suas fronteiras
 
-A arquitetura é **híbrida e composta**, como a atividade permite e espera. O ADR de composição é o [ADR 0001](adr/0001-compor-microsservicos-por-subdominio-com-espinha-de-eventos.md); ele é o primeiro que um novo integrante deve ler (seção 4.6). Os estilos e **onde cada fronteira começa e termina**:
+A arquitetura é **híbrida e composta**, como a atividade permite e espera. O ADR de composição vigente é o [ADR 0009](adr/0009-consolidar-o-nucleo-transacional-em-monolito-modular.md), que substitui o [ADR 0001](adr/0001-compor-microsservicos-por-subdominio-com-espinha-de-eventos.md) após a leitura cruzada; é o primeiro que um novo integrante deve ler (seção 4.6). Os estilos e **onde cada fronteira começa e termina**:
 
 | Estilo | Onde vale (fronteira) | Onde termina | ADR |
 |---|---|---|---|
-| **Microsserviços** (cap. 9) | Estrutura geral: um serviço por subdomínio com atributos divergentes (validação, cartões, telemetria, informação, financeiro, integração/conformidade) | Não desce ao interior do serviço nem aos subdomínios de baixo volume, mantidos como módulos | 0001 |
-| **Orientada a eventos** (cap. 11) | Conector padrão *entre* serviços: barramento com entrega ao menos uma vez | Não substitui a chamada síncrona quando a resposta é necessária na hora (ex.: recarga na tela) | 0001 |
-| **Hexagonal** (cap. 7) | Interior de cada serviço: domínio no centro, portas e adaptadores para banco, mensageria e terceiros | Não muda processo nem rede; é organização de código (crítica de escopo, seção 7.6.1) | 0001, 0003 |
+| **Monólito modular** (cap. 6) | Núcleo transacional num só processo: validação-servidor, cartões e recarga, integração/conformidade, atendimento — esquemas separados por módulo | Não abrange os quanta de atributos divergentes, que seguem como serviços | 0009 |
+| **Microsserviços** (cap. 9) | Só os quanta exigidos pelos requisitos: validador embarcado (edge), telemetria, informação ao passageiro, núcleo financeiro | Não pulveriza o núcleo transacional, consolidado no monólito modular | 0009 |
+| **Orientada a eventos** (cap. 11) | Conector padrão *entre* as unidades: barramento com entrega ao menos uma vez | Não substitui a chamada síncrona quando a resposta é necessária na hora (ex.: recarga na tela) | 0009 |
+| **Hexagonal** (cap. 7) | Interior de cada unidade: domínio no centro, portas e adaptadores | Não muda processo nem rede; é organização de código (crítica de escopo, seção 7.6.1) | 0003 |
 | **Event Sourcing** (cap. 15) | Somente o Núcleo Financeiro (repasse e conciliação): fonte de verdade append-only | Não entra em cadastro de cartões nem em catálogo, onde o estado atual basta e a LGPD aperta | 0002 |
 | **CQRS** (cap. 14) | Lado de leitura do financeiro (projeções de conciliação) e informação ao passageiro | Não vale onde a leitura precisa refletir a escrita no mesmo instante (ex.: saldo para autorizar) | 0002 |
+| **Pipes and Filters** (cap. 16) | Depuração da telemetria de fiscalização, a jusante da ingestão | Não entra na ingestão, que fica simples para escalar | 0010 |
 
 A régua que separa os quanta é o **acoplamento dinâmico** (seção 2.5): dois serviços que só se falam por evento assíncrono continuam sendo dois quanta e respondem sozinhos quando o vizinho cai. É essa propriedade que faz a telemetria poder tombar sem levar a validação junto.
 
@@ -53,21 +57,20 @@ A figura de contexto mostra o sistema como uma caixa e seus interlocutores; a de
 
 ![Nível 2 — contêineres](c4-conteineres.png)
 
-*Figura 2: nível 2 (contêineres). Cada seta traz a ação e o protocolo; a caixa tracejada é a fronteira do sistema, não uma unidade de implantação (os contêineres dentro dela se implantam separadamente).*
+*Figura 2: nível 2 (contêineres), versão final. Cada seta traz a ação e o protocolo; a caixa tracejada é a fronteira do sistema. O núcleo transacional aparece como um único contêiner (monólito modular, ADR 0009) e a depuração da telemetria como um estágio Pipes and Filters (ADR 0010).*
 
 Os contêineres e seu papel:
 
 - **Validador embarcado** — unidade de implantação na borda (edge), com fila local append-only. Decide offline em até 300 ms e sincroniza ao reconectar ([ADR 0006](adr/0006-validar-offline-no-embarcado-e-deduplicar-a-passagem-no-servidor.md)).
 - **Gateway de API** — entrada única: autentica, limita, roteia e registra o rastro de acesso ([ADR 0004](adr/0004-operar-em-nuvem-com-trilha-de-auditoria-e-observabilidade-obrigatorias.md)).
-- **Serviço de Validação** — deduplica passagens e detecta uso em dois ônibus, reconstruindo o uso a partir do fluxo.
-- **Serviço de Cartões e Recarga** — saldo, recarga, bloqueio e gratuidade; banco próprio; saga com o banco.
-- **Serviço de Telemetria** — ingestão de fluxo; absorve o pico de posições GPS e o amortece no barramento.
+- **Núcleo Transacional** — monólito modular, com esquemas separados por módulo: validação-servidor, cartões e recarga, integração/conformidade e atendimento ([ADR 0009](adr/0009-consolidar-o-nucleo-transacional-em-monolito-modular.md)).
+- **Serviço de Telemetria** — ingestão de fluxo; absorve o pico de posições GPS e o amortece.
+- **Depuração de Telemetria** — pipeline Pipes and Filters que valida, limpa e reconcilia as posições para a fiscalização, retendo o fluxo cru para auditoria ([ADR 0010](adr/0010-depurar-telemetria-de-fiscalizacao-por-pipes-and-filters.md)).
 - **Informação ao Passageiro** — projeção de leitura (CQRS); escala réplicas no pico do rush e recua fora dele.
 - **Núcleo Financeiro** — repasse e conciliação event-sourced; **contêiner mais importante** e detalhado no nível 3.
-- **Integração e Conformidade** — serviço hexagonal com adaptadores anticorrupção para terceiros e a execução do esquecimento LGPD; abriga os módulos de atendimento e gratuidade (baixo volume).
 - **Barramento de eventos** — corretor de mensagens; espinha dorsal assíncrona e origem da trilha de auditoria.
 
-Cada serviço é dono exclusivo do próprio banco (database per service, seção 9.2); nenhum lê a tabela do outro, nem para relatório ([ADR 0002](adr/0002-dar-a-cada-servico-o-proprio-banco-e-usar-event-sourcing-no-financeiro.md)).
+Cada unidade é dona exclusiva do próprio dado — banco por serviço nos quanta e esquema por módulo no monólito (seção 9.2 e ADR 0009); nenhuma lê a tabela da outra, nem para relatório, invariante verificado por função de aptidão ([ADR 0012](adr/0012-impor-invariantes-de-arquitetura-por-funcoes-de-aptidao-no-ci.md)).
 
 ---
 
@@ -80,22 +83,23 @@ O Núcleo Financeiro é o contêiner mais importante porque nele se encontram as
 *Figura 3: nível 3 (componentes) do Núcleo Financeiro. A caixa tracejada é a unidade de implantação; os cilindros são armazenamento; cada seta traz o tipo do conector.*
 
 - **Adaptador de entrada** — consome os eventos `ViagemRealizada` e `TarifaVigente` do barramento (conector: **evento**) e expõe a API de fechamento.
-- **Serviço de aplicação de repasse** — orquestra o comando; chama o domínio, o adaptador do event store e o gestor de chaves (conector: **chamada de procedimento**).
-- **Agregado de Repasse e Conciliação** — regra de negócio: aplica a tarifa **vigente na data de cada viagem**, não a tarifa de hoje.
-- **Gestor de chaves e cifra por titular** — cifra os campos pessoais com chave por titular e grava/consulta o keystore (conector: **acesso a dado compartilhado**). É o mecanismo do [ADR 0005](adr/0005-conciliar-auditoria-imutavel-e-esquecimento-lgpd-por-crypto-shredding.md).
+- **Serviço de aplicação de repasse** — orquestra o fechamento e a glosa; chama o domínio, o catálogo de regras, o adaptador do event store e o gestor de identidade (conector: **chamada de procedimento**).
+- **Agregado de Repasse e Conciliação** — aplica a tarifa **vigente na data de cada viagem** e decide a **glosa de duplicidade** ([ADR 0011](adr/0011-resolver-duplicidade-de-validacao-por-glosa-compensatoria.md)).
+- **Catálogo de regras tarifárias** — estratégia versionada por vigência; o agregado resolve a regra pela data do evento ([ADR 0007](adr/0007-representar-regras-tarifarias-como-estrategia-versionada-por-vigencia.md)).
+- **Gestor de identidade** — cifra a identidade civil com chave por titular e grava/consulta o keystore; a elegibilidade regulatória é escrita em claro e pseudonimizada (conector: **acesso a dado compartilhado**). É o mecanismo do [ADR 0008](adr/0008-segmentar-dado-pessoal-em-identidade-civil-e-elegibilidade-regulatoria.md).
 - **Adaptador do event store** — grava os eventos em modo append (conector: **acesso a dado compartilhado**).
-- **Projetor de conciliação** — reprocessa o fluxo (conector: **fluxo**) e mantém a projeção de leitura (CQRS).
+- **Projetor de conciliação** — reprocessa o fluxo (conector: **fluxo**) e mantém a projeção de leitura (CQRS), com subsídio e elegibilidade.
 
-Ao fechar o mês, o serviço publica `RepasseFechado` no barramento (evento) e solicita a liquidação ao Serviço de Integração (chamada de procedimento remota).
+Ao fechar o mês, o serviço publica `RepasseFechado` — e a `Glosa`, quando há duplicidade — no barramento (evento) e solicita a liquidação ao Núcleo Transacional (chamada de procedimento remota).
 
 ---
 
 ## 5. Dados, propriedade e consistência
 
-- **Propriedade:** cada serviço é dono do próprio dado; o acesso externo passa pela interface publicada (seção 9.2). O histórico de viagens identificado é dado pessoal sob a LGPD e recebe tratamento especial (seção 8 e ADR 0005).
+- **Propriedade:** cada unidade é dona do próprio dado; o acesso externo passa pela interface publicada (seção 9.2). O histórico de viagens identificado é dado pessoal sob a LGPD e recebe tratamento segmentado (seção 7.5 e [ADR 0008](adr/0008-segmentar-dado-pessoal-em-identidade-civil-e-elegibilidade-regulatoria.md)).
 - **Fonte de verdade do financeiro:** o event store append-only. O estado atual é uma projeção derivada, reconstruível por reprodução; snapshots periódicos evitam reprocessar o fluxo inteiro (seção 15.7).
 - **Consistência entre serviços:** não há transação distribuída (o commit em duas fases é descartado, seção 9.2). Processos que cruzam serviços — recarregar, debitar, liquidar — usam **saga** com compensação e passos **idempotentes**, operando em **consistência eventual**. Estornar compensa cobrar; liberar compensa reservar.
-- **Consistência de leitura:** as projeções CQRS têm atraso; o atraso vira requisito medido e tratado como incidente quando violado (seção 14.7). Onde a leitura precisa refletir a escrita na hora — o saldo usado para autorizar o próximo uso — não se usa a projeção, e sim o dono do dado.
+- **Consistência de leitura:** as projeções CQRS têm atraso; o atraso vira requisito medido e tratado como incidente quando violado (seção 14.7). No canal online (aplicativo), a leitura exata consulta o dono do dado, não a projeção; no embarque, a autorização é **offline**, contra a lista embarcada com teto de risco (ADR 0006), nunca uma consulta à nuvem.
 
 ---
 
@@ -112,7 +116,7 @@ Seguindo a primeira lei da arquitetura — tudo é trade-off (seção 2.4) — a
 | Testabilidade | Domínio isolado de infraestrutura (portas e adaptadores) | Testes de contrato e de projeção adicionais |
 | Custo | Escala e paga por serviço, conforme a carga real | Custo operacional multiplicado pelo número de serviços |
 
-**A tensão honesta.** Microsserviços "quando evitar" (seção 9.6) e a recomendação de Fowler ("monolito primeiro") pesam contra uma equipe de 15 pessoas. Por isso a composição **não pulveriza**: mantém poucos serviços, extrai só os subdomínios cujos atributos divergem de verdade (validador offline, telemetria em pico, financeiro auditável) e conserva atendimento, gratuidade e conformidade como módulos de um único serviço. É a aplicação literal do conselho de "boa modularidade interna" onde a distribuição não se paga.
+**A tensão honesta (revisada após a leitura cruzada).** Microsserviços "quando evitar" (seção 9.6) e a recomendação de Fowler ("monolito primeiro") pesam contra uma equipe de 15 pessoas. Na Entrega 2 a composição já não pulverizava; após a objeção 04 do Grupo 02, fomos além e **consolidamos o núcleo transacional num monólito modular** (validação-servidor, cartões e recarga, integração/conformidade, atendimento), mantendo como serviços apenas os quanta cujos atributos divergem de verdade: validador de borda, telemetria, informação ao passageiro e núcleo financeiro ([ADR 0009](adr/0009-consolidar-o-nucleo-transacional-em-monolito-modular.md), que substitui o 0001). É a aplicação literal de "boa modularidade interna" onde a distribuição não se paga.
 
 ---
 
@@ -130,7 +134,7 @@ Cada resposta traz o mecanismo passo a passo, o que aconteceria se a decisão fa
 3. Cada validação vira um registro numa **fila local append-only assinada**, com um **identificador único** = (validador, cartão, viagem, carimbo de tempo).
 4. Ao reconectar (em minutos ou em até 4 horas), o validador envia a fila acumulada ao **Serviço de Validação** com **entrega ao menos uma vez**.
 5. O serviço é **idempotente** por aquele identificador (mensagem repetida não conta duas vezes) e **reconstrói o uso do cartão a partir do fluxo de eventos**.
-6. Se o mesmo cartão e a mesma viagem chegam de **dois validadores diferentes**, a colisão é detectada na consolidação: o segundo uso é marcado como suspeita, com os dois fatos preservados em ordem como prova — nunca sobrescritos.
+6. Se o mesmo cartão e a mesma viagem chegam de **dois validadores diferentes**, a colisão é detectada na consolidação, com os dois fatos preservados em ordem como prova — nunca sobrescritos. Confirmada por impossibilidade física, ela gera uma **glosa compensatória** no Núcleo Financeiro (liquida a primeira viagem, retém a duplicata, manda o cartão à denylist), em vez de ficar como mera suspeita ([ADR 0011](adr/0011-resolver-duplicidade-de-validacao-por-glosa-compensatoria.md)).
 
 **Se desse errado.** Sem o identificador único e a idempotência, uma sincronização repetida cobraria a passagem duas vezes; sem a fila assinada, não haveria prova do uso concorrente. Por isso a dedução fica no servidor, e não no ônibus, onde não há como consultar os outros 1.199 validadores offline.
 
@@ -145,7 +149,7 @@ Cada resposta traz o mecanismo passo a passo, o que aconteceria se a decisão fa
 2. A **recarga** (app, loja, totem) e o **débito** (ônibus, vindo da validação) chegam como **fatos distintos**, cada um idempotente por identificador.
 3. Uma **saga** aplica esses fatos em ordem e compensa quando um passo falha (estornar compensa cobrar); o saldo converge por **consistência eventual**.
 4. A recarga em loja/totem entra pelo **adaptador anticorrupção** e só é dada como boa quando **conciliada contra o retorno do banco**, o que sustenta "fraude de recarga zero".
-5. Onde a leitura precisa ser exata na hora — o saldo usado para **autorizar** o próximo uso — consulta-se o **dono do dado**, nunca uma projeção atrasada.
+5. No **canal online** (aplicativo, autorização de recarga na tela), a leitura exata consulta o **dono do dado**, nunca uma projeção atrasada. No **embarque**, porém, a autorização é **offline**: a catraca decide contra a lista embarcada (último saldo/limite sincronizado + teto de risco) e a conciliação real vem depois — nunca há consulta à nuvem no caminho dos 300 ms (ADR 0006).
 
 **Se desse errado.** Se dois serviços escrevessem o saldo, ou se a recarga fosse confirmada antes da conciliação bancária, abririam-se brechas de fraude e divergência; a saga idempotente evita cobrar/estornar em duplicidade quando as mensagens se repetem.
 
@@ -160,8 +164,9 @@ Cada resposta traz o mecanismo passo a passo, o que aconteceria se a decisão fa
 2. O **barramento funciona como amortecedor**: os consumidores (informação ao passageiro, painéis) absorvem o pico **com atraso**, sem bloquear a ingestão (seção 11.5).
 3. Como o acoplamento é **só por evento assíncrono**, uma enxurrada de posições **não propaga pressão** para a validação nem para o repasse — eles continuam de pé se a telemetria congestionar (seção 2.5).
 4. O serviço de telemetria **escala sozinho** (mais réplicas) no pico e **recua** fora dele, sem mexer nos outros serviços (ADR 0004).
+5. A telemetria também é **prova de fiscalização**; por isso, a jusante da ingestão, um pipeline **Pipes and Filters** valida, limpa e reconcilia as posições antes de alimentar a fiscalização, enquanto o fluxo cru é retido para auditoria ([ADR 0010](adr/0010-depurar-telemetria-de-fiscalizacao-por-pipes-and-filters.md)). A ingestão em si fica simples, para não comprometer a escala.
 
-**Se desse errado.** Se a telemetria chamasse os outros serviços de forma síncrona, ou compartilhasse banco com eles, o pico viraria indisponibilidade geral — exatamente o "monolito distribuído" que o ADR 0001 evita.
+**Se desse errado.** Se a telemetria chamasse os outros serviços de forma síncrona, ou compartilhasse banco com eles, o pico viraria indisponibilidade geral — o "monolito distribuído" que a composição evita; e alimentar a fiscalização com GPS cru produziria "veículos fantasma" e multas contestáveis, o que o pipeline de depuração previne.
 
 → Sustentação: [ADR 0001](adr/0001-compor-microsservicos-por-subdominio-com-espinha-de-eventos.md), [ADR 0004](adr/0004-operar-em-nuvem-com-trilha-de-auditoria-e-observabilidade-obrigatorias.md). Figura 2 (Telemetria → Barramento; Barramento → Informação ao Passageiro).
 
@@ -184,30 +189,30 @@ Cada resposta traz o mecanismo passo a passo, o que aconteceria se a decisão fa
 **Resposta curta.** O dado pessoal de cada evento é cifrado com uma chave por titular; apagar é destruir a chave (crypto-shredding), o que torna o pessoal irrecuperável sem tocar nos totais financeiros.
 
 **Como funciona.**
-1. Em cada evento, separam-se dois blocos: o **pessoal** (quem viajou, quando, de onde) e o **financeiro** (linha, operadora, tarifa, valor).
-2. O bloco pessoal é **cifrado com uma chave exclusiva do titular**, guardada num **keystore fora do event store**; o bloco financeiro fica **em claro e não identifica a pessoa**.
+1. Em cada evento, separam-se **três blocos** ([ADR 0008](adr/0008-segmentar-dado-pessoal-em-identidade-civil-e-elegibilidade-regulatoria.md)): **identidade civil** (nome, CPF), **elegibilidade regulatória** (tipo de benefício, cartão social, emissor) e **viagem/financeiro** (linha, operadora, tarifa).
+2. A **identidade civil** é **cifrada com uma chave por titular** (keystore fora do event store); a **elegibilidade** fica **em claro e pseudonimizada** por um identificador opaco, retida por base legal; o bloco financeiro fica em claro e não identifica a pessoa.
 3. Ao receber um **pedido de esquecimento**, o sistema **destrói a chave** daquele titular. Sem a chave, o conteúdo pessoal vira ruído irrecuperável — mas o **evento, sua ordem e os totais de conciliação permanecem íntegros**.
 4. Dentro do fluxo, exclusão nunca é apagar um fato: registra-se um **evento de reversão**; o histórico de que houve esquecimento também fica auditável.
-5. Resultado: a **mesma base** atende a auditoria (reconstrói tudo) e a LGPD (esquece o que a lei manda) — a resposta direta à pergunta que domina o envelope E.
+5. Resultado: a **mesma base** atende a auditoria (reconstrói tudo, inclusive a **prova de elegibilidade do subsídio**, que sobrevive ao esquecimento) e a LGPD (apaga a identidade civil) — a resposta direta à pergunta que domina o envelope E.
 
-**Se desse errado.** Apagar fisicamente os eventos quebraria a cadeia de versões e o fechamento financeiro; manter o pessoal em claro violaria a LGPD. O crypto-shredding é justamente o ponto de equilíbrio — e por ser o mais arriscado, é o que o código pequeno da Entrega 3 vai provar (seção 8).
+**Se desse errado.** Apagar fisicamente os eventos quebraria a cadeia de versões e o fechamento financeiro; cifrar a elegibilidade junto com a identidade (como o ADR 0005 original fazia) apagaria a prova do subsídio no esquecimento; manter a identidade em claro violaria a LGPD. A segmentação do ADR 0008 é o ponto de equilíbrio — e por ser a mais arriscada, é o que o código pequeno da Entrega 3 prova (seção 8).
 
-→ Sustentação: [ADR 0005](adr/0005-conciliar-auditoria-imutavel-e-esquecimento-lgpd-por-crypto-shredding.md); apoio em [ADR 0002](adr/0002-dar-a-cada-servico-o-proprio-banco-e-usar-event-sourcing-no-financeiro.md). Figura 3 (Gestor de chaves e cifra por titular → Keystore).
+→ Sustentação: [ADR 0008](adr/0008-segmentar-dado-pessoal-em-identidade-civil-e-elegibilidade-regulatoria.md) (substitui o 0005); apoio em [ADR 0002](adr/0002-dar-a-cada-servico-o-proprio-banco-e-usar-event-sourcing-no-financeiro.md). Figura 3 (Gestor de identidade → Keystore; Projeção com subsídio + elegibilidade).
 
 ---
 
 ## 8. Riscos e a decisão mais arriscada
 
-A decisão de maior risco é a do [ADR 0005](adr/0005-conciliar-auditoria-imutavel-e-esquecimento-lgpd-por-crypto-shredding.md): conciliar um armazenamento **imutável** (exigido pela auditoria) com o **direito ao esquecimento** (exigido pela LGPD) por destruição criptográfica. O risco é concreto — a seção 15.6 registra o conflito como motivo para *evitar* event sourcing quando há exclusão de dados pessoais em prazo curto — e por isso será **provada pelo código pequeno (Entrega 3)**: um programa que grava eventos com o campo pessoal cifrado por titular, calcula o total de repasse, destrói a chave de um passageiro e mostra que o pessoal ficou irrecuperável **enquanto o total de conciliação continua idêntico**. Se a decisão estivesse errada, apagar a pessoa mudaria o fechamento — e é isso que o spike verifica.
+A decisão de maior risco é conciliar um armazenamento **imutável** (exigido pela auditoria) com o **direito ao esquecimento** (exigido pela LGPD) por destruição criptográfica — registrada no [ADR 0005](adr/0005-conciliar-auditoria-imutavel-e-esquecimento-lgpd-por-crypto-shredding.md) e refinada no [ADR 0008](adr/0008-segmentar-dado-pessoal-em-identidade-civil-e-elegibilidade-regulatoria.md) após a leitura cruzada, que separou identidade civil (apagável) de elegibilidade regulatória (retida). O risco é concreto — a seção 15.6 registra o conflito como motivo para *evitar* event sourcing quando há exclusão de dados pessoais — e por isso é **provado pelo código pequeno (Entrega 3)**: o programa grava a identidade cifrada por titular e a elegibilidade pseudonimizada, destrói a chave de um passageiro e mostra que a identidade ficou irrecuperável **enquanto o total de repasse e a prova de elegibilidade continuam intactos**. Se a decisão estivesse errada, apagar a pessoa mudaria o fechamento ou apagaria a prova do subsídio — e é isso que o spike verifica que não acontece.
 
-Outros riscos assumidos: consistência eventual visível entre recarga e uso (janela até a saga fechar); custo operacional de uma composição distribuída sobre 15 pessoas (mitigado por não pulverizar); crescimento do armazenamento de eventos (mitigado por snapshots e retenção); e o keystore como novo ativo crítico (perder chave = perder dado).
+Outros riscos assumidos: consistência eventual visível entre recarga e uso (janela até a saga fechar); custo operacional de uma composição distribuída sobre 15 pessoas (mitigado pela consolidação no monólito modular, ADR 0009, e pelas funções de aptidão, ADR 0012); crescimento do armazenamento de eventos (mitigado por snapshots e retenção); e o keystore como novo ativo crítico (perder chave = perder a identidade). A janela de glosa até a sincronização (ADR 0011) e o falso positivo de baldeação são riscos calibrados pela regra de impossibilidade física.
 
 ---
 
 ## 9. Referências
 
-- ABREU, Douglas H. S. *Estilos Arquiteturais de Software: guia de consulta*. Capítulos 2 (atributos de qualidade), 3 (componentes, conectores, C4), 4 (ADR), 7 (hexagonal), 9 (microsserviços), 11 (orientada a eventos), 14 (CQRS), 15 (event sourcing); Apêndices A e B.
+- ABREU, Douglas H. S. *Estilos Arquiteturais de Software: guia de consulta*. Capítulos 2 (atributos de qualidade), 3 (componentes, conectores, C4), 4 (ADR e funções de aptidão), 6 (monólito modular), 7 (hexagonal), 9 (microsserviços), 11 (orientada a eventos), 14 (CQRS), 15 (event sourcing), 16 (pipes and filters); Apêndices A e B.
 - BRASIL. Lei nº 13.709, de 14 de agosto de 2018 (LGPD). Base do direito ao esquecimento tratado no ADR 0005.
 - Diagramas C4 https://c4model.com (fontes Mermaid neste diretório): `c4-contexto.mmd`, `c4-conteineres.mmd`, `c4-componentes.mmd`.
-- ADRs: pasta [`adr/`](adr/) — 0001 a 0006.
+- ADRs: pasta [`adr/`](adr/) — 0001 a 0012 (0008 substitui 0005; 0009 substitui 0001). Mudanças da versão final em [`../5-final/CHANGELOG.md`](../5-final/CHANGELOG.md).
 - Mapa de restrições e decisões: [`mapa-restricoes-decisoes.md`](mapa-restricoes-decisoes.md).

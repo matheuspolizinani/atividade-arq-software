@@ -1,6 +1,6 @@
 # ADR 0005: conciliar auditoria imutável e esquecimento LGPD por destruição criptográfica
 
-**Status:** aceito
+**Status:** substituído pelo ADR 0008
 
 **Contexto:** O envelope E impõe duas exigências que se contradizem. A fiscalização pede trilha completa e reconstruível, e o repasse é event-sourced, com armazenamento append-only onde o evento antigo é imutável (ADR 0002, capítulo 15). A LGPD dá ao passageiro o direito de pedir a eliminação do histórico de viagens, que é dado pessoal (Lei nº 13.709/2018). A seção 15.6 registra o conflito direto: um armazenamento imutável não apaga registros sem quebrar a integridade do fluxo, e o repasse financeiro depende desse fluxo para fechar e para responder a contestação em até 30 dias. É a decisão de maior risco do projeto, e por isso é a provada pelo código pequeno da Entrega 3.
 
